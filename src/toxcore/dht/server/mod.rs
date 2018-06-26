@@ -33,6 +33,7 @@ pub mod hole_punching;
 use futures::{Future, Sink, Stream, future, stream};
 use futures::sync::mpsc;
 use parking_lot::RwLock;
+use tokio::timer::Interval;
 
 use std::io::{ErrorKind, Error};
 use std::net::SocketAddr;
@@ -245,6 +246,20 @@ impl Server {
             .map(|_| ());
 
         Box::new(res)
+    }
+
+    /// Run DHT main loop periodically. Result future will never be completed
+    /// successfully.
+    pub fn run(self) -> IoFuture<()> {
+        let interval = Duration::from_secs(1);
+        let wakeups = Interval::new(Instant::now(), interval);
+        let future = wakeups
+            .map_err(|e| Error::new(ErrorKind::Other, format!("DHT server timer error: {:?}", e)))
+            .for_each(move |_instant| {
+                trace!("DHT server wake up");
+                self.dht_main_loop()
+            });
+        Box::new(future)
     }
 
     // send PingRequest using Ping object
