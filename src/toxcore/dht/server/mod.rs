@@ -127,7 +127,7 @@ pub struct Server {
     // maximum value is 5, so setting this value to 2 will do sending 3 times
     // setting this value to 0 will do sending 5 times
     bootstrap_times: Arc<RwLock<u32>>,
-    last_nodes_req_time: Arc<RwLock<Instant>>,
+    last_nodes_req_time: Arc<RwLock<Option<Instant>>>,
     ping_sender: Arc<RwLock<PingSender>>,
     // toxcore version used in BootstrapInfo
     tox_core_version: u32,
@@ -198,7 +198,7 @@ impl Server {
             friends: Arc::new(RwLock::new(Vec::new())),
             bootstrap_nodes: Arc::new(RwLock::new(Bucket::new(None))),
             bootstrap_times: Arc::new(RwLock::new(0)),
-            last_nodes_req_time: Arc::new(RwLock::new(Instant::now())),
+            last_nodes_req_time: Arc::new(RwLock::new(None)),
             ping_sender: Arc::new(RwLock::new(PingSender::new())),
             tox_core_version: 0,
             motd: Vec::new(),
@@ -359,7 +359,7 @@ impl Server {
             }).collect::<Vec<PackedNode>>();
 
         if !good_nodes.is_empty()
-            && self.last_nodes_req_time.read().deref().elapsed() >= nodes_req_interval
+            && self.last_nodes_req_time.read().deref().map_or(true, |time| time.elapsed() >= nodes_req_interval)
             && *self.bootstrap_times.read().deref() < MAX_BOOTSTRAP_TIMES {
 
             let num_nodes = good_nodes.len();
@@ -377,7 +377,7 @@ impl Server {
             let res = self.send_nodes_req(random_node, self.pk, client);
 
             *self.bootstrap_times.write().deref_mut() += 1;
-            *self.last_nodes_req_time.write().deref_mut() = Instant::now();
+            *self.last_nodes_req_time.write().deref_mut() = Some(Instant::now());
             res
         } else {
             Box::new(future::ok(()))
